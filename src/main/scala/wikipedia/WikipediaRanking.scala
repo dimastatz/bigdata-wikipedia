@@ -27,8 +27,7 @@ object WikipediaRanking {
    */
   def occurrencesOfLang(lang: String, rdd: RDD[WikipediaArticle]): Int = {
     rdd
-      .map(i => i.text)
-      .map(i => i.split(" "))
+      .map(i => i.text.split(" "))
       .filter(i => i.contains(lang))
       .count().asInstanceOf[Int]
   }
@@ -53,14 +52,9 @@ object WikipediaRanking {
    * to the Wikipedia pages in which it occurs.
    */
   def makeIndex(langs: List[String], rdd: RDD[WikipediaArticle]): RDD[(String, Iterable[WikipediaArticle])] = {
-    val rddSearch = rdd.map(i => (i, i.text.split(" "))).collect()
-
-    val data = langs
-      .distinct
-      .map(i => (i, rddSearch.filter(j => j._2.contains(i))))
-      .map(i => (i._1, i._2.map(j => j._1).toIterable))
-
-    sc.parallelize(data)
+    val articleToLangs = rdd.map(i => (i, langs.filter(j => i.text.split(" ").contains(j))))
+    var pairs = articleToLangs.sortBy(i => i._2.length).flatMap(i => i._2.map(j => (j,i._1)))
+    pairs.groupBy(i => i._1).map(i => (i._1, i._2.map(j => j._2)))
   }
 
 
@@ -97,12 +91,10 @@ object WikipediaRanking {
 
     /* Languages ranked according to (1) */
     val langsRanked: List[(String, Int)] = timed("Part 1: naive ranking", rankLangs(langs, wikiRdd))
-    println("step1")
 
     /* An inverted index mapping languages to wikipedia pages on which they appear */
     def index: RDD[(String, Iterable[WikipediaArticle])] = makeIndex(langs, wikiRdd)
-    println("step2")
-    
+
     /* Languages ranked according to (2), using the inverted index */
     val langsRanked2: List[(String, Int)] = timed("Part 2: ranking using inverted index", rankLangsUsingIndex(index))
 
